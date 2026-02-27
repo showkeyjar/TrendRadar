@@ -2588,24 +2588,24 @@ advanced:
 
 ### 6. Docker 部署
 
-**镜像说明：**
+**服务说明（本地构建后运行）：**
 
-TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
+Docker 部署包含两个服务，可按需启动：
 
-| 镜像名称 | 用途 | 说明 |
+| 服务名称 | 用途 | 说明 |
 |---------|------|------|
-| `wantcat/trendradar` | 新闻推送服务 | 定时抓取新闻、推送通知（必选） |
-| `wantcat/trendradar-mcp` | AI 分析服务 | MCP 协议支持、AI 对话分析（可选） |
+| `trendradar` | 新闻推送服务 | 定时抓取新闻、推送通知（必选） |
+| `trendradar-mcp` | AI 分析服务 | MCP 协议支持、AI 对话分析（可选） |
 
 > 💡 **建议**：
-> - 只需要推送功能：仅部署 `wantcat/trendradar` 镜像
-> - 需要 AI 分析功能：同时部署两个镜像
+> - 只需要推送功能：仅启动 `trendradar` 服务
+> - 需要 AI 分析功能：同时启动 `trendradar` 与 `trendradar-mcp`
 
 <details>
 <summary>👉 点击展开：<strong>Docker 部署完整指南</strong></summary>
 <br>
 
-#### 方式一：使用 docker compose（推荐）
+#### 本地构建 + docker compose（推荐）
 
 1. **创建项目目录和配置**:
 
@@ -2616,7 +2616,7 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    cd TrendRadar
    ```
 
-   **方式 1-B：使用 wget 下载配置文件**
+   **方式 1-B：使用 wget 下载配置文件（不使用 git clone 时）**
    ```bash
    # 创建目录结构
    mkdir -p trendradar/{config,docker}
@@ -2627,9 +2627,9 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/config/frequency_words.txt -P config/
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/config/ai_analysis_prompt.txt -P config/
 
-   # 下载 docker compose 配置
+   # 下载 docker compose 配置（本地构建版）
    wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/.env  -P docker/
-   wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose.yml  -P docker/
+   wget https://raw.githubusercontent.com/sansan0/TrendRadar/master/docker/docker-compose-build.yml  -P docker/
    ```
 
    > 💡 **说明**：Docker 部署需要的关键目录结构如下：
@@ -2641,7 +2641,7 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
 │   └── ai_analysis_prompt.txt    # AI 分析提示词（v5.0.0 新增，可选）
 └── docker/
     ├── .env
-    └── docker-compose.yml
+    └── docker-compose-build.yml
 ```
 
 2. **配置文件说明**:
@@ -2651,8 +2651,21 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    - `config/frequency_words.txt` - **关键词配置**（设置你关心的热点词汇）
    - `config/ai_analysis_prompt.txt` - **AI 提示词配置**（自定义 AI 分析角色和输出格式，v5.0.0 新增）
    - `docker/.env` - **敏感信息 + Docker 特有配置**（webhook URLs、API Key、S3 密钥、定时任务）
+   - `docker/.env` 中的 `HOST_CONFIG_DIR`、`HOST_OUTPUT_DIR` - **宿主机外部持久化目录**（容器重启/重建不丢配置和数据）
 
-   > 💡 **配置修改生效**：修改 `config.yaml` 后，执行 `docker compose up -d` 重启容器即可生效
+   **⚠️ 强烈建议：设置外部挂载目录（持久化）**
+   ```bash
+   # 编辑 docker/.env
+   HOST_CONFIG_DIR=/data/trendradar/config
+   HOST_OUTPUT_DIR=/data/trendradar/output
+   ```
+   Windows 示例：
+   ```text
+   HOST_CONFIG_DIR=D:/trendradar/config
+   HOST_OUTPUT_DIR=D:/trendradar/output
+   ```
+
+   > 💡 **配置修改生效**：修改 `config.yaml` 后，执行 `docker compose -f docker-compose-build.yml up -d --build` 重启容器即可生效
 
    **⚙️ 环境变量覆盖机制（v3.0.5+）**
 
@@ -2673,40 +2686,26 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    **使用方法**：
    - 修改 `.env` 文件，填写需要的配置
    - 或在 NAS/群晖 Docker 管理界面的"环境变量"中直接添加
-   - 重启容器后生效：`docker compose up -d`
+   - 重启容器后生效：`docker compose -f docker-compose-build.yml up -d --build`
 
 
-3. **启动服务**:
-
-   **选项 A：启动所有服务（推送 + AI 分析）**
+3. **构建并启动服务**:
    ```bash
-   # 拉取最新镜像
-   docker compose pull
-
-   # 启动所有服务（trendradar + trendradar-mcp）
-   docker compose up -d
+   cd docker
+   docker compose -f docker-compose-build.yml up -d --build
    ```
 
-   **选项 B：仅启动新闻推送服务**
+   可选：只启动新闻推送服务
    ```bash
-   # 只启动 trendradar（定时抓取和推送）
-   docker compose pull trendradar
-   docker compose up -d trendradar
+   docker compose -f docker-compose-build.yml up -d --build trendradar
    ```
 
-   **选项 C：仅启动 MCP AI 分析服务**
+   可选：只启动 MCP 服务
    ```bash
-   # 只启动 trendradar-mcp（提供 AI 分析接口）
-   docker compose pull trendradar-mcp
-   docker compose up -d trendradar-mcp
+   docker compose -f docker-compose-build.yml up -d --build trendradar-mcp
    ```
 
-   > 💡 **提示**：
-   > - 大多数用户只需启动 `trendradar` 即可实现新闻推送功能
-   > - 只有需要使用 ChatGPT/Gemini 进行 AI 对话分析时，才需启动 `trendradar-mcp`
-   > - 两个服务相互独立，可根据需求灵活组合
-
-4. **查看运行状态**:
+4. **查看运行状态与日志**:
    ```bash
    # 查看新闻推送服务日志
    docker logs -f trendradar
@@ -2718,72 +2717,16 @@ TrendRadar 提供两个独立的 Docker 镜像，可根据需求选择部署：
    docker ps | grep trendradar
 
    # 停止特定服务
-   docker compose stop trendradar      # 停止推送服务
-   docker compose stop trendradar-mcp  # 停止 MCP 服务
+   docker compose -f docker-compose-build.yml stop trendradar      # 停止推送服务
+   docker compose -f docker-compose-build.yml stop trendradar-mcp  # 停止 MCP 服务
    ```
 
-#### 方式二：本地构建（开发者选项）
-
-如果需要自定义修改代码或构建自己的镜像：
+#### 更新代码后的重建
 
 ```bash
-# 克隆项目
-git clone https://github.com/sansan0/TrendRadar.git
-cd TrendRadar
-
-# 修改配置文件
-vim config/config.yaml
-vim config/frequency_words.txt
-
-# 使用构建版本的 docker compose
 cd docker
-cp docker-compose-build.yml docker-compose.yml
+docker compose -f docker-compose-build.yml up -d --build
 ```
-
-**构建并启动服务**：
-
-```bash
-# 选项 A：构建并启动所有服务
-docker compose build
-docker compose up -d
-
-# 选项 B：仅构建并启动新闻推送服务
-docker compose build trendradar
-docker compose up -d trendradar
-
-# 选项 C：仅构建并启动 MCP AI 分析服务
-docker compose build trendradar-mcp
-docker compose up -d trendradar-mcp
-```
-
-> 💡 **架构参数说明**：
-> - 默认构建 `amd64` 架构镜像（适用于大多数 x86_64 服务器）
-> - 如需构建 `arm64` 架构（Apple Silicon、树莓派等），设置环境变量：
->   ```bash
->   export DOCKER_ARCH=arm64
->   docker compose build
->   ```
-
-#### 镜像更新
-
-```bash
-# 方式一：手动更新（爬虫 + MCP 镜像）
-docker pull wantcat/trendradar:latest
-docker pull wantcat/trendradar-mcp:latest
-docker compose down
-docker compose up -d
-
-# 方式二：使用 docker compose 更新
-docker compose pull
-docker compose up -d
-```
-
-**可用镜像**：
-
-| 镜像名称 | 用途 | 说明 |
-|---------|------|------|
-| `wantcat/trendradar` | 新闻推送服务 | 定时抓取新闻、推送通知 |
-| `wantcat/trendradar-mcp` | MCP 服务 | AI 分析功能（可选） |
 
 #### 服务管理命令
 
@@ -2911,11 +2854,11 @@ flowchart TB
 
 **快速启动**：
 
-如果已按照 [方式一：使用 docker compose](#方式一使用-docker-compose推荐) 完成部署，只需启动 MCP 服务：
+如果已按照 [本地构建 + docker compose（推荐）](#本地构建--docker-compose推荐) 完成部署，只需启动 MCP 服务：
 
 ```bash
 cd TrendRadar/docker
-docker compose up -d trendradar-mcp
+docker compose -f docker-compose-build.yml up -d trendradar-mcp
 
 # 查看运行状态
 docker ps | grep trendradar-mcp
@@ -2930,7 +2873,7 @@ docker run -d --name trendradar-mcp \
   -v $(pwd)/config:/app/config:ro \
   -v $(pwd)/output:/app/output:ro \
   -e TZ=Asia/Shanghai \
-  wantcat/trendradar-mcp:latest
+  trendradar-mcp:local
 
 # Windows PowerShell
 docker run -d --name trendradar-mcp `
@@ -2938,7 +2881,7 @@ docker run -d --name trendradar-mcp `
   -v ${PWD}/config:/app/config:ro `
   -v ${PWD}/output:/app/output:ro `
   -e TZ=Asia/Shanghai `
-  wantcat/trendradar-mcp:latest
+  trendradar-mcp:local
 ```
 
 > ⚠️ **注意**：单独运行时，确保当前目录下有 `config/` 和 `output/` 文件夹，且包含配置文件和新闻数据。

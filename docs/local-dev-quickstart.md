@@ -81,6 +81,9 @@ docker\\build-local.bat
 使用 Compose 启动（包含 `trendradar`、`trendradar-mcp`、`trendradar-webapp`）：
 ```bash
 cd docker
+# 建议先在 docker/.env 设置外部持久化目录：
+# HOST_CONFIG_DIR=/data/trendradar/config
+# HOST_OUTPUT_DIR=/data/trendradar/output
 docker compose -f docker-compose-build.yml up -d --build
 ```
 
