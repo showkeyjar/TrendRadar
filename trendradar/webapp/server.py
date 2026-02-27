@@ -129,6 +129,10 @@ def _p_intel_cfg() -> Path:
     return Path("config/intelligence.yaml")
 
 
+def _p_intel_cfg_override() -> Path:
+    return Path("output/webapp/intelligence_override.yaml")
+
+
 def _p_feedback_locks() -> Path:
     return Path("output/webapp/feedback_locks.json")
 
@@ -153,10 +157,21 @@ def _load_base_cfg() -> Dict[str, Any]:
 
 
 def _load_intel_cfg() -> Dict[str, Any]:
+    # 优先读取可写覆盖文件（适配 Docker config 只读挂载场景）
+    p = _p_intel_cfg_override()
+    if p.exists():
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {"industry_intel": {"keyword_buckets": []}}
     p = _p_intel_cfg()
     if not p.exists():
         return {"industry_intel": {"keyword_buckets": []}}
     return yaml.safe_load(p.read_text(encoding="utf-8")) or {"industry_intel": {"keyword_buckets": []}}
+
+
+def _active_intel_profile_path() -> str:
+    p = _p_intel_cfg_override()
+    if p.exists():
+        return str(p).replace("\\", "/")
+    return str(_p_intel_cfg()).replace("\\", "/")
 
 
 def _timeline_presets() -> List[str]:
@@ -609,7 +624,7 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
     js = _p_intel_json()
     md.parent.mkdir(parents=True, exist_ok=True)
     try:
-        profile_used = "config/intelligence.yaml"
+        profile_used = _active_intel_profile_path()
         fallback_used = False
         results = run_intel_pipeline(profile_file=profile_used, feedback_file=str(_p_feedback()), top_k=top_k)
         if not results:
@@ -716,7 +731,7 @@ def _read_keyword_buckets() -> List[Dict[str, Any]]:
     return cleaned
 
 
-def _save_keyword_buckets(buckets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _save_keyword_buckets(buckets: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], str]:
     path = _p_intel_cfg()
     data = _load_intel_cfg()
     intel = data.setdefault("industry_intel", {})
@@ -734,8 +749,17 @@ def _save_keyword_buckets(buckets: List[Dict[str, Any]]) -> List[Dict[str, Any]]
             }
         )
     intel["keyword_buckets"] = normalized
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    return normalized
+    saved_path = ""
+    raw = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
+    try:
+        path.write_text(raw, encoding="utf-8")
+        saved_path = str(path).replace("\\", "/")
+    except (PermissionError, OSError):
+        override = _p_intel_cfg_override()
+        override.parent.mkdir(parents=True, exist_ok=True)
+        override.write_text(raw, encoding="utf-8")
+        saved_path = str(override).replace("\\", "/")
+    return normalized, saved_path
 
 
 def _ensure_fallback_intel_profile() -> Path:
@@ -1159,7 +1183,7 @@ function removeBucket(i){if(!confirm('确认删除该分组？'))return;buckets.
 async function refreshSuggestions(){const d=await api('/api/keywords/suggestions');if(!d.ok){w('候选词提炼失败:'+ (d.error||''));return;}suggestions=d.items||[];renderSuggestions();w(`候选词刷新完成：${suggestions.length} 条（已接受反馈 ${d.accepted_count||0} 条，LLM ${d.used_llm?'已参与':'未参与'}）`);}
 async function load(){const d=await api('/api/settings/keywords');buckets=d.keyword_buckets||[];render();await refreshSuggestions();}
 function applySuggestions(){if(!buckets.length){w('请先创建一个关键词分组');return;}const target=parseInt(document.getElementById('suggestBucket').value||'-1',10);if(target<0||target>=buckets.length){w('请选择有效分组');return;}const selected=[];suggestions.forEach((x,i)=>{const el=document.getElementById(`sg-${i}`);if(el&&el.checked)selected.push(String(x.keyword||'').trim());});if(!selected.length){w('请先勾选候选关键词');return;}const set=new Set((buckets[target].keywords||[]).map(x=>String(x).trim()).filter(Boolean));let added=0;selected.forEach(k=>{if(k&&!set.has(k)){set.add(k);added++;}});buckets[target].keywords=Array.from(set);setDirty(true);render();w(`已加入 ${added} 个关键词到分组“${buckets[target].name||('分组'+(target+1))}”，请点击“保存关键词配置”生效`);}
-async function save(){const d=await api('/api/settings/keywords','POST',{keyword_buckets:buckets});if(d.ok){w('保存成功');setDirty(false);}else w('保存失败:'+ (d.error||''));}
+async function save(){const d=await api('/api/settings/keywords','POST',{keyword_buckets:buckets});if(d.ok){w(`保存成功${d.saved_to?`（${d.saved_to}）`:''}`);setDirty(false);}else w('保存失败:'+ (d.error||''));}
 load();"""
     return _html("TrendRadar 关键词", "keywords", body, script)
 
@@ -1493,8 +1517,8 @@ class AppHandler(BaseHTTPRequestHandler):
 
         if p == "/api/settings/keywords":
             try:
-                data = _save_keyword_buckets(body.get("keyword_buckets", []))
-                _json_response(self, {"ok": True, "keyword_buckets": data})
+                data, saved_to = _save_keyword_buckets(body.get("keyword_buckets", []))
+                _json_response(self, {"ok": True, "keyword_buckets": data, "saved_to": saved_to})
             except Exception as e:
                 _json_response(self, {"ok": False, "error": str(e)}, status=400)
             return

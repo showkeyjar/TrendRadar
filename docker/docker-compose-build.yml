@@ -70,7 +70,7 @@ services:
       - "127.0.0.1:8899:8899"
 
     volumes:
-      - ${HOST_CONFIG_DIR:-../config}:/app/config:ro
+      - ${HOST_CONFIG_DIR:-../config}:/app/config
       - ${HOST_OUTPUT_DIR:-../output}:/app/output
 
     environment:

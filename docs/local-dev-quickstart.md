@@ -100,6 +100,13 @@ docker compose -f docker-compose-single.yml up -d --build
 说明：
 - 容器名：`trendradar-single`
 - 可在 `docker/.env` 控制是否启用内置 Web 控制台/MCP：`RUN_WEBAPP`、`RUN_MCP`
+- Web 控制台需要把关键词等配置写回 `HOST_CONFIG_DIR`，因此该目录必须具备写权限（不要挂载为只读）。
+- Linux 权限示例：
+  ```bash
+  sudo mkdir -p /data/trendradar/config /data/trendradar/output
+  sudo chown -R $USER:$USER /data/trendradar
+  chmod -R u+rwX /data/trendradar
+  ```
 
 ## 5. VS Code 调试（推荐）
 在 `.vscode/launch.json` 使用以下配置：
