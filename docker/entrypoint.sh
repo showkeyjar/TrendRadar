@@ -10,9 +10,29 @@ fi
 # 保存环境变量
 env >> /etc/environment
 
+WEBAPP_PID=""
+MCP_PID=""
+
+start_optional_services() {
+    if [ "${RUN_WEBAPP:-false}" = "true" ]; then
+        local webapp_port="${WEBAPP_PORT:-8899}"
+        echo "🌐 启动 Web 控制台: 0.0.0.0:${webapp_port}"
+        /usr/local/bin/python -m trendradar.webapp --host 0.0.0.0 --port "${webapp_port}" &
+        WEBAPP_PID=$!
+    fi
+
+    if [ "${RUN_MCP:-false}" = "true" ]; then
+        local mcp_port="${MCP_PORT:-3333}"
+        echo "🧠 启动 MCP 服务: 0.0.0.0:${mcp_port}"
+        /usr/local/bin/python -m mcp_server.server --transport http --host 0.0.0.0 --port "${mcp_port}" &
+        MCP_PID=$!
+    fi
+}
+
 case "${RUN_MODE:-cron}" in
 "once")
     echo "🔄 单次执行"
+    start_optional_services
     exec /usr/local/bin/python -m trendradar
     ;;
 "cron")
@@ -32,6 +52,8 @@ case "${RUN_MODE:-cron}" in
         echo "▶️ 立即执行一次"
         /usr/local/bin/python -m trendradar
     fi
+
+    start_optional_services
 
     # 启动 Web 服务器（如果配置了）
     if [ "${ENABLE_WEBSERVER:-false}" = "true" ]; then

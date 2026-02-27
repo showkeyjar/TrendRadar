@@ -2705,6 +2705,11 @@ Docker 部署包含两个服务，可按需启动：
    docker compose -f docker-compose-build.yml up -d --build trendradar-mcp
    ```
 
+   单容器模式（抓取 + Web 控制台 + MCP）：
+   ```bash
+   docker compose -f docker-compose-single.yml up -d --build
+   ```
+
 4. **查看运行状态与日志**:
    ```bash
    # 查看新闻推送服务日志

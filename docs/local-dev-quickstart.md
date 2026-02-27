@@ -91,6 +91,16 @@ docker compose -f docker-compose-build.yml up -d --build
 - Web 控制台：`http://127.0.0.1:8899`
 - MCP 服务：`http://127.0.0.1:3333`
 
+单容器模式（抓取 + Web 控制台 + MCP 全部在一个容器）：
+```bash
+cd docker
+docker compose -f docker-compose-single.yml up -d --build
+```
+
+说明：
+- 容器名：`trendradar-single`
+- 可在 `docker/.env` 控制是否启用内置 Web 控制台/MCP：`RUN_WEBAPP`、`RUN_MCP`
+
 ## 5. VS Code 调试（推荐）
 在 `.vscode/launch.json` 使用以下配置：
 

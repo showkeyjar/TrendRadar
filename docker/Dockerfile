@@ -55,6 +55,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY docker/manage.py .
 COPY trendradar/ ./trendradar/
+COPY mcp_server/ ./mcp_server/
 
 # 复制 entrypoint.sh 并强制转换为 LF 格式
 COPY docker/entrypoint.sh /entrypoint.sh.tmp
