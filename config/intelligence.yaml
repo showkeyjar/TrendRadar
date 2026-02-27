@@ -1,0 +1,163 @@
+industry_intel:
+  keyword_buckets:
+  - name: 行业节奏-政策推动
+    flow_stage: 线索发现
+    weight: 1.4
+    keywords:
+    - 农业气象
+    - 碳通量
+    - 生态环境监测
+    - 生态数据
+    - 水文
+    - 生物多样性
+    - 森林防火
+    - 雷击火
+    - 气象站
+    - 生态服务
+    - 生态监测网络
+    - 监测体系建设
+    - 数据要素
+    - 双碳
+  - name: 生态数字化与AI监测
+    flow_stage: 政策研判
+    weight: 1.6
+    keywords:
+    - 生态数字化
+    - ai监测
+    - 环境数据平台
+    - 生态数据平台
+    - 智能监测平台
+    - 气候科技
+    - 气象科技
+    - 观测服务
+    - 碳监测
+  - name: 投融资信号词
+    flow_stage: 资本动向
+    weight: 1.8
+    keywords:
+    - 融资
+    - 投资
+    - 产业基金
+    - 引导基金
+    - 国资平台
+    - 生态科技投资
+    - 生态数据+投资
+    - 监测平台+产业基金
+    - 碳监测+融资
+  source_watches:
+  - name: 国家气象局
+    weight: 2.0
+    match_terms:
+    - 国家气象局
+    - cma.gov.cn
+    - 中国气象局
+  - name: 生态环境部
+    weight: 2.2
+    match_terms:
+    - 生态环境部
+    - mee.gov.cn
+    - 生态环境监测
+  - name: 国家林草局
+    weight: 1.8
+    match_terms:
+    - 国家林业和草原局
+    - 林草局
+    - forest
+    - 森林防火
+  - name: 水利部
+    weight: 1.8
+    match_terms:
+    - 水利部
+    - mwr.gov.cn
+    - 水文
+  - name: 应急管理部
+    weight: 1.8
+    match_terms:
+    - 应急管理部
+    - mem.gov.cn
+    - 防灾减灾
+  - name: 文旅部/生态旅游
+    weight: 1.3
+    match_terms:
+    - 生态旅游
+    - 文化和旅游部
+    - mct.gov.cn
+  capital_watches:
+  - name: 政策资金-发改委
+    weight: 2.2
+    match_terms:
+    - 国家发改委
+    - 发改委
+    - 数据要素
+    - 监测体系建设
+  - name: 政策资金-科技部二十一世纪中心
+    weight: 1.8
+    match_terms:
+    - 二十一世纪中心
+    - 科技部
+    - 重点研发
+    - 专项
+  - name: 政策资金-生态环境部专项
+    weight: 2.2
+    match_terms:
+    - 生态专项
+    - 重点研发
+    - 碳监测
+    - 生态监测网络
+    - 数据平台
+  - name: 国家绿色发展基金
+    weight: 2.4
+    match_terms:
+    - 国家绿色发展基金
+    - 绿色发展基金
+    - 双碳基金
+  - name: 国资与产业资本
+    weight: 1.9
+    match_terms:
+    - 北京高精尖产业基金
+    - 深圳绿色基金
+    - 长三角双碳基金
+    - 国资平台
+  - name: AI与硬科技投资机构
+    weight: 1.7
+    match_terms:
+    - 红杉中国
+    - 高瓴资本
+    - 启明创投
+    - 硬科技投资
+  - name: 投融资数据源
+    weight: 1.5
+    match_terms:
+    - 清科研究中心
+    - 投中网
+    - 融资事件
+    - 项目库
+  window_signals:
+  - name: 窗口期信号-政策+资金同频
+    weight: 3.0
+    any_of:
+    - 生态监测
+    - 碳监测
+    - 生态数据平台
+    - 数据要素
+    all_of:
+    - 产业基金
+  - name: 窗口期信号-国资入场
+    weight: 2.6
+    any_of:
+    - 国资平台
+    - 引导基金
+    - 省级平台
+    - 市级平台
+    all_of:
+    - 生态
+    - 监测
+  - name: 窗口期信号-AI监测规模化
+    weight: 2.8
+    any_of:
+    - ai监测
+    - 智能监测平台
+    - 观测服务
+    all_of:
+    - 生态
+    - 数据平台

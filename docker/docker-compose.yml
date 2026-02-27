@@ -56,6 +56,23 @@ services:
       - RUN_MODE=${RUN_MODE:-cron}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
 
+  trendradar-webapp:
+    image: wantcat/trendradar:latest
+    container_name: trendradar-webapp
+    restart: unless-stopped
+    entrypoint: ["python", "-m", "trendradar.webapp", "--host", "0.0.0.0", "--port", "8899"]
+
+    ports:
+      - "127.0.0.1:8899:8899"
+
+    volumes:
+      - ../config:/app/config:ro
+      - ../output:/app/output
+
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+
   trendradar-mcp:
     image: wantcat/trendradar-mcp:latest
     container_name: trendradar-mcp

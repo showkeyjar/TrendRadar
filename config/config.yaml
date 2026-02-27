@@ -59,6 +59,26 @@ platforms:
       name: "今日头条"
     - id: "baidu"
       name: "百度热搜"
+    - id: "weibo"
+      name: "微博"
+    - id: "zhihu"
+      name: "知乎"
+    - id: "douyin"
+      name: "抖音"
+    - id: "36kr"
+      name: "36氪"
+    - id: "huxiu"
+      name: "虎嗅"
+    - id: "ithome"
+      name: "IT之家"
+    - id: "juejin"
+      name: "掘金"
+    - id: "v2ex"
+      name: "V2EX"
+    - id: "douban-movie"
+      name: "豆瓣电影"
+    - id: "douban-group"
+      name: "豆瓣小组"
     - id: "wallstreetcn-hot"
       name: "华尔街见闻"
     - id: "thepaper"
@@ -71,12 +91,6 @@ platforms:
       name: "凤凰网"
     - id: "tieba"
       name: "贴吧"
-    - id: "weibo"
-      name: "微博"
-    - id: "douyin"
-      name: "抖音"
-    - id: "zhihu"
-      name: "知乎"
 
 
 
@@ -117,6 +131,58 @@ rss:
       name: "Hacker News"
       url: "https://hnrss.org/frontpage"
       # max_age_days: 1               # 示例：只推送1天内的文章
+
+    - id: "techcrunch"
+      name: "TechCrunch"
+      url: "https://techcrunch.com/feed/"
+
+    - id: "theverge"
+      name: "The Verge"
+      url: "https://www.theverge.com/rss/index.xml"
+
+    - id: "wired"
+      name: "Wired"
+      url: "https://www.wired.com/feed/rss"
+
+    - id: "arstechnica"
+      name: "Ars Technica"
+      url: "https://feeds.arstechnica.com/arstechnica/index"
+
+    - id: "reuters-world"
+      name: "Reuters World"
+      url: "https://feeds.reuters.com/Reuters/worldNews"
+
+    - id: "reuters-business"
+      name: "Reuters Business"
+      url: "https://feeds.reuters.com/reuters/businessNews"
+
+    - id: "wsj-world"
+      name: "WSJ World"
+      url: "https://feeds.a.dj.com/rss/RSSWorldNews.xml"
+
+    - id: "bloomberg-tech"
+      name: "Bloomberg Technology"
+      url: "https://feeds.bloomberg.com/technology/news.rss"
+
+    - id: "economist"
+      name: "The Economist"
+      url: "https://www.economist.com/the-world-this-week/rss.xml"
+
+    - id: "ft-world"
+      name: "Financial Times World"
+      url: "https://www.ft.com/world?format=rss"
+
+    - id: "mit-tech-review"
+      name: "MIT Technology Review"
+      url: "https://www.technologyreview.com/feed/"
+
+    - id: "infoq-cn"
+      name: "InfoQ 中文"
+      url: "https://www.infoq.cn/feed"
+
+    - id: "sspai"
+      name: "少数派"
+      url: "https://sspai.com/feed"
 
     - id: "ruanyifeng"
       name: "阮一峰的网络日志"
