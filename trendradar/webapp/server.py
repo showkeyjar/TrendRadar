@@ -609,7 +609,16 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
     js = _p_intel_json()
     md.parent.mkdir(parents=True, exist_ok=True)
     try:
-        results = run_intel_pipeline(profile_file="config/intelligence.yaml", feedback_file=str(_p_feedback()), top_k=top_k)
+        profile_used = "config/intelligence.yaml"
+        fallback_used = False
+        results = run_intel_pipeline(profile_file=profile_used, feedback_file=str(_p_feedback()), top_k=top_k)
+        if not results:
+            fallback_profile = _ensure_fallback_intel_profile()
+            fallback_results = run_intel_pipeline(profile_file=str(fallback_profile), feedback_file=str(_p_feedback()), top_k=top_k)
+            if fallback_results:
+                results = fallback_results
+                profile_used = str(fallback_profile).replace("\\", "/")
+                fallback_used = True
         build_intel_digest(results, output_file=str(md))
         dump_results_json(results, str(js))
         _merge_into_intel_feed(_j(js) or [])
@@ -622,8 +631,11 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
             f"TopK={top_k}",
             f"来源Top: {top_sources_text}",
             f"关键词Top: {top_keywords_text}",
+            f"画像: {profile_used}",
             f"输出: {str(md).replace('\\\\', '/')}",
         ]
+        if fallback_used:
+            message_parts.append("已启用兜底画像")
         if ai_summary:
             message_parts.append(f"AI: {ai_summary}")
         final_message = " | ".join(message_parts)
@@ -646,6 +658,8 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
             "json_file": str(js).replace("\\", "/"),
             "summary": summary,
             "ai_summary": ai_summary,
+            "profile_used": profile_used,
+            "fallback_used": fallback_used,
         }
     except Exception as e:
         end = datetime.now()
@@ -721,6 +735,30 @@ def _save_keyword_buckets(buckets: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     intel["keyword_buckets"] = normalized
     path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return normalized
+
+
+def _ensure_fallback_intel_profile() -> Path:
+    data = _load_intel_cfg()
+    intel = data.setdefault("industry_intel", {})
+    buckets = intel.setdefault("keyword_buckets", [])
+    fallback_name = "通用热点-科技资本兜底"
+    exists = any(str(x.get("name", "")).strip() == fallback_name for x in buckets if isinstance(x, dict))
+    if not exists:
+        buckets.append(
+            {
+                "name": fallback_name,
+                "flow_stage": "观察",
+                "weight": 1.1,
+                "keywords": [
+                    "ai", "人工智能", "大模型", "算力", "芯片", "半导体", "机器人", "自动驾驶",
+                    "融资", "投资", "基金", "并购", "ipo", "上市", "财报", "云", "数据平台",
+                ],
+            }
+        )
+    p = Path("output/webapp/runtime_intelligence_fallback.yaml")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return p
 
 
 def _feedback_key(title: str, source: str, url: str) -> str:
@@ -1036,7 +1074,7 @@ function setBar(id,textId,pct,label,color){const bar=document.getElementById(id)
 function renderProgress(task,id,textId,kind){if(!task){setBar(id,textId,0,`${kind}进度：待执行`,'#94a3b8');return;}if(task.running){const elapsed=Math.max(0,(Date.now()-ts(task.last_start))/1000);const expected=kind==='抓取任务'?180:60;const pct=Math.min(92,8+(elapsed/expected)*84);setBar(id,textId,pct,`${kind}进度：执行中 ${Math.floor(elapsed)}s`,'#2563eb');return;}if(task.ok===true){setBar(id,textId,100,`${kind}进度：已完成（${task.duration_sec||0}s）`,'#16a34a');return;}if(task.ok===false){setBar(id,textId,100,`${kind}进度：失败（${task.duration_sec||0}s）`,'#dc2626');return;}setBar(id,textId,0,`${kind}进度：待执行`,'#94a3b8');}
 async function status(){const d=await api('/api/status');document.getElementById('s1').textContent=`系统概览：情报 ${d.intel_count} 条 | 已反馈 ${d.feedback_events} 条 | 通知 ${d.notification_configured?'已配置':'未配置'} | 调度 ${d.schedule_enabled?'开启':'关闭'}（${presetZh(d.schedule_preset)}）`;document.getElementById('s2').textContent=taskLine('抓取任务',d.task_status?.crawler);document.getElementById('s3').textContent=taskLine('情报任务',d.task_status?.intel);renderProgress(d.task_status?.crawler,'crawlerBar','crawlerBarText','抓取任务');renderProgress(d.task_status?.intel,'intelBar','intelBarText','情报任务');const highlights=extractHighlights(d.task_status?.crawler?.message||'');document.getElementById('s4').textContent=`最近报告：${(d.reports||[])[0]||'暂无'}${highlights.length?` | 最近执行重点：${highlights.slice(-3).join(' / ')}`:''}`;}
 async function runCrawler(){w('已开始：抓取热点 + RSS，并在结束后自动刷新情报。');const d=await api('/api/run/crawler','POST',{});w(d.ok?'抓取任务已完成。':'抓取任务失败。');if(d.output){extractHighlights(d.output).forEach(x=>w(' - '+x));}await status();}
-async function runIntel(){const top=parseInt(document.getElementById('topk').value||'30',10);w(`已开始：情报分析（Top ${top}）。`);const d=await api('/api/run/intel','POST',{top});if(!d.ok){w('情报分析失败：'+ (d.error||''));return;}w(`情报分析完成：命中 ${d.count} 条，结果文件 ${d.json_file||'-'}`);const s=d.summary||{};const src=(s.top_sources||[]).map(x=>`${x.name}(${x.count})`).join(' / ');const kw=(s.top_keywords||[]).map(x=>`${x.name}(${x.count})`).join(' / ');if(src)w(`来源分布：${src}`);if(kw)w(`关键词分布：${kw}`);if(d.ai_summary)w(`AI 总结：${d.ai_summary}`);await status();}
+async function runIntel(){const top=parseInt(document.getElementById('topk').value||'30',10);w(`已开始：情报分析（Top ${top}）。`);const d=await api('/api/run/intel','POST',{top});if(!d.ok){w('情报分析失败：'+ (d.error||''));return;}w(`情报分析完成：命中 ${d.count} 条，结果文件 ${d.json_file||'-'}`);if(d.profile_used)w(`命中画像：${d.profile_used}${d.fallback_used?'（已启用兜底）':''}`);const s=d.summary||{};const src=(s.top_sources||[]).map(x=>`${x.name}(${x.count})`).join(' / ');const kw=(s.top_keywords||[]).map(x=>`${x.name}(${x.count})`).join(' / ');if(src)w(`来源分布：${src}`);if(kw)w(`关键词分布：${kw}`);if(d.ai_summary)w(`AI 总结：${d.ai_summary}`);await status();}
 status(); setInterval(status, 2000);"""
     return _html("TrendRadar 任务", "dashboard", body, script)
 
