@@ -624,6 +624,7 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
         _merge_into_intel_feed(_j(js) or [])
         summary = _build_intel_summary(results, top_k)
         ai_summary = _build_ai_intel_summary(results, summary)
+        md_path = str(md).replace("\\", "/")
         top_sources_text = ", ".join([f"{x['name']}({x['count']})" for x in summary.get("top_sources", [])[:3]]) or "-"
         top_keywords_text = ", ".join([f"{x['name']}({x['count']})" for x in summary.get("top_keywords", [])[:5]]) or "-"
         message_parts = [
@@ -632,7 +633,7 @@ def _run_intel(top_k: int = 30) -> Dict[str, Any]:
             f"来源Top: {top_sources_text}",
             f"关键词Top: {top_keywords_text}",
             f"画像: {profile_used}",
-            f"输出: {str(md).replace('\\\\', '/')}",
+            f"输出: {md_path}",
         ]
         if fallback_used:
             message_parts.append("已启用兜底画像")
