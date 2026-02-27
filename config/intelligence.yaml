@@ -1,11 +1,49 @@
 industry_intel:
   keyword_buckets:
-  - name: 测试分组
-    flow_stage: 观察
-    weight: 1.0
+  - name: 行业节奏-政策推动
+    flow_stage: 线索发现
+    weight: 1.4
     keywords:
-    - a
-    - b
+    - 农业气象
+    - 碳通量
+    - 生态环境监测
+    - 生态数据
+    - 水文
+    - 生物多样性
+    - 森林防火
+    - 雷击火
+    - 气象站
+    - 生态服务
+    - 生态监测网络
+    - 监测体系建设
+    - 数据要素
+    - 双碳
+  - name: 生态数字化与AI监测
+    flow_stage: 政策研判
+    weight: 1.6
+    keywords:
+    - 生态数字化
+    - ai监测
+    - 环境数据平台
+    - 生态数据平台
+    - 智能监测平台
+    - 气候科技
+    - 气象科技
+    - 观测服务
+    - 碳监测
+  - name: 投融资信号词
+    flow_stage: 资本动向
+    weight: 1.8
+    keywords:
+    - 融资
+    - 投资
+    - 产业基金
+    - 引导基金
+    - 国资平台
+    - 生态科技投资
+    - 生态数据+投资
+    - 监测平台+产业基金
+    - 碳监测+融资
   source_watches:
   - name: 国家气象局
     weight: 2.0
