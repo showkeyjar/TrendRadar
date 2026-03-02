@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import yaml
 
@@ -91,6 +91,29 @@ def _read_json(h: BaseHTTPRequestHandler) -> Dict[str, Any]:
     return json.loads(h.rfile.read(length).decode("utf-8"))
 
 
+def _to_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        n = int(value)
+    except Exception:
+        return default
+    return max(minimum, min(maximum, n))
+
+
+def _paginate(items: List[Any], page: int, page_size: int) -> Dict[str, Any]:
+    total = len(items)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * page_size
+    end = start + page_size
+    return {
+        "items": items[start:end],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": total_pages,
+    }
+
+
 def _j(path: Path) -> Any:
     if not path.exists():
         return None
@@ -114,7 +137,7 @@ def _p_settings() -> Path:
 
 
 def _p_runtime_cfg() -> Path:
-    return Path("output/webapp/runtime_config.yaml")
+    return Path("config/runtime_config.yaml")
 
 
 def _p_base_cfg() -> Path:
@@ -257,6 +280,10 @@ def _save_settings(payload: Dict[str, Any]) -> Dict[str, Any]:
     p = _p_settings()
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 每次保存都同步刷新运行时配置，确保容器内定时任务读取最新设置
+    runtime_cfg = _build_runtime_cfg(cur)
+    cur["_runtime_config"] = str(runtime_cfg).replace("\\", "/")
     return cur
 
 
@@ -534,10 +561,11 @@ def _build_runtime_cfg(settings: Dict[str, Any]) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(yaml.safe_dump(base, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
-    # 调度系统会按 config_path 同目录查找 timeline.yaml，这里同步一份到 runtime 目录
+    # 调度系统会按 config_path 同目录查找 timeline.yaml
+    # 若 runtime 配置目录与原配置目录不同，则同步一份 timeline.yaml
     src_timeline = _p_timeline()
     dst_timeline = out.parent / "timeline.yaml"
-    if src_timeline.exists():
+    if src_timeline.exists() and src_timeline.resolve() != dst_timeline.resolve():
         shutil.copyfile(src_timeline, dst_timeline)
 
     return out
@@ -1108,17 +1136,26 @@ def _page_intel() -> str:
     body = """<div class='card'><div class='t'>情报分析说明</div>
 <div class='hint'>系统会对每条信息按以下维度加权：关键词分组命中、政策/资本来源命中、窗口信号命中、热榜排名加成。<br>你可以直接在本页点“有价值/一般/无价值”反馈，系统会自动学习并调整后续推送优先级。</div></div>
 <div class='card'><div class='t'>情报结果（历史流）</div><div class='hint'>新抓取后，旧文章会继续保留。点击标题会标记为已读并变灰。<br>“为什么命中”展示分析结果；“分析细节”可查看打分构成。</div>
+<div class='row'><div class='meta' id='pagerInfo'>加载中...</div><button class='soft' onclick='prevPage()'>上一页</button><button class='soft' onclick='nextPage()'>下一页</button><select id='pageSize' style='max-width:120px'><option value='20'>20/页</option><option value='50'>50/页</option><option value='100'>100/页</option></select></div>
 <table><thead><tr><th>#</th><th>标题</th><th>来源</th><th>评分</th><th>为什么命中</th><th>分析细节</th><th>反馈</th><th>操作</th></tr></thead><tbody id='rows'></tbody></table></div>"""
     script = """
 let lockMap = {};
+let page = 1;
+let pageSize = 20;
+let totalPages = 1;
+let total = 0;
 function rowKey(row){const it=row.item||{};return [String(it.source_name||it.source_id||'').toLowerCase().trim(),String(it.title||'').toLowerCase().trim(),String(it.url||'').toLowerCase().trim()].join('|');}
 function goFeedback(row){localStorage.setItem('trendradar_selected_intel',JSON.stringify(row));location.href='/feedback';}
-async function qfb(row,rating){const it=row.item||{};const payload={rating,keywords:row.matched_keywords||[],sources:[it.source_name||it.source_id||''].filter(Boolean),add_keywords:[],block_keywords:[],note:'quick_feedback',item_title:it.title||'',item_source:it.source_name||it.source_id||'',item_url:it.url||''};const d=await api('/api/feedback','POST',payload);if(!d.ok){console.warn('反馈失败',d.error||'');return;}await load();}
+async function qfb(row,rating){const it=row.item||{};const payload={rating,keywords:row.matched_keywords||[],sources:[it.source_name||it.source_id||''].filter(Boolean),add_keywords:[],block_keywords:[],note:'quick_feedback',item_title:it.title||'',item_source:it.source_name||it.source_id||'',item_url:it.url||''};const d=await api('/api/feedback','POST',payload);if(!d.ok){console.warn('反馈失败',d.error||'');return;}await load(page);}
 function reason(row){const a=[];if((row.matched_buckets||[]).length)a.push('关键词组:'+row.matched_buckets.slice(0,2).join('/'));if((row.matched_capital||[]).length)a.push('资本:'+row.matched_capital.slice(0,2).join('/'));if((row.matched_signals||[]).length)a.push('窗口:'+row.matched_signals.slice(0,2).join('/'));if((row.matched_keywords||[]).length)a.push('词:'+row.matched_keywords.slice(0,3).join(','));return a.join(' | ')||'-';}
 function detailText(row){const d=row.detail||{};const b=Object.entries(d.bucket_scores||{}).map(x=>x[0]+':'+x[1]).slice(0,3);const s=Object.entries(d.source_scores||{}).map(x=>x[0]+':'+x[1]).slice(0,3);const g=Object.entries(d.signal_scores||{}).map(x=>x[0]+':'+x[1]).slice(0,3);const parts=[];if(b.length)parts.push('关键词分:'+b.join(','));if(s.length)parts.push('来源分:'+s.join(','));if(g.length)parts.push('信号分:'+g.join(','));return parts.join(' | ')||'-';}
 async function markRead(key){await api('/api/intel/mark-read','POST',{key});refreshIntelBadge();}
-async function load(){const lockData=await api('/api/feedback/locks');lockMap=lockData.items||{};const d=await api('/api/intel/feed');const rows=(d.items||[]).slice().sort((a,b)=>String(b.last_seen||'').localeCompare(String(a.last_seen||'')));const tb=document.getElementById('rows');if(!rows.length){tb.innerHTML='<tr><td colspan=\"8\">暂无数据，请先在“运行任务”页执行情报分析</td></tr>';return;}tb.innerHTML='';rows.forEach((wrap,i)=>{const r=wrap.row||{};const it=r.item||{};const k=wrap.key||rowKey(r);const locked=!!lockMap[k];const read=!!wrap.read;const titleStyle=read?\"style='color:#94a3b8'\":\"\";const fbCell=locked?`<span class='pill'>已反馈</span>`:`<button class='good soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,\"\\\\'\")},5)'>有价值</button> <button class='mid soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,\"\\\\'\")},3)'>一般</button> <button class='bad soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,\"\\\\'\")},1)'>无价值</button>`;const detailBtn=locked?`<button class='soft' disabled style='opacity:.5;cursor:not-allowed'>已锁定</button>`:`<button class='soft' onclick='goFeedback(${JSON.stringify(r).replace(/'/g,\"\\\\'\")})'>详细反馈</button>`;const tr=document.createElement('tr');tr.innerHTML=`<td>${i+1}</td><td><a class='lk' ${titleStyle} href='${esc(it.url||'#')}' target='_blank' onclick='markRead(\"${esc(k)}\")'>${esc(it.title||'')}</a><div class='meta'>首次:${wrap.first_seen||'-'} | 最近:${wrap.last_seen||'-'} | ${read?'已读':'未读'}</div></td><td>${esc(it.source_name||it.source_id||'')}</td><td>${Number(r.score||0).toFixed(2)}</td><td>${esc(reason(r))}</td><td>${esc(detailText(r))}</td><td>${fbCell}</td><td>${detailBtn}</td>`;tb.appendChild(tr);});}
-load();"""
+function renderPager(){document.getElementById('pagerInfo').textContent=`第 ${page}/${totalPages} 页，共 ${total} 条`;}
+async function load(targetPage){page=Math.max(1,parseInt(targetPage||page,10)||1);const lockData=await api('/api/feedback/locks');lockMap=lockData.items||{};const d=await api(`/api/intel/feed?page=${page}&page_size=${pageSize}`);page=Number(d.page||1);totalPages=Number(d.total_pages||1);total=Number(d.total||0);const rows=d.items||[];const tb=document.getElementById('rows');renderPager();if(!rows.length){tb.innerHTML='<tr><td colspan="8">暂无数据，请先在“运行任务”页执行情报分析</td></tr>';return;}tb.innerHTML='';rows.forEach((wrap,i)=>{const r=wrap.row||{};const it=r.item||{};const k=wrap.key||rowKey(r);const locked=!!lockMap[k];const read=!!wrap.read;const titleStyle=read?"style='color:#94a3b8'":"";const fbCell=locked?`<span class='pill'>已反馈</span>`:`<button class='good soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,"\\'")},5)'>有价值</button> <button class='mid soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,"\\'")},3)'>一般</button> <button class='bad soft' onclick='qfb(${JSON.stringify(r).replace(/'/g,"\\'")},1)'>无价值</button>`;const detailBtn=locked?`<button class='soft' disabled style='opacity:.5;cursor:not-allowed'>已锁定</button>`:`<button class='soft' onclick='goFeedback(${JSON.stringify(r).replace(/'/g,"\\'")})'>详细反馈</button>`;const tr=document.createElement('tr');const serial=(page-1)*pageSize+i+1;tr.innerHTML=`<td>${serial}</td><td><a class='lk' ${titleStyle} href='${esc(it.url||'#')}' target='_blank' onclick='markRead("${esc(k)}")'>${esc(it.title||'')}</a><div class='meta'>首次:${wrap.first_seen||'-'} | 最近:${wrap.last_seen||'-'} | ${read?'已读':'未读'}</div></td><td>${esc(it.source_name||it.source_id||'')}</td><td>${Number(r.score||0).toFixed(2)}</td><td>${esc(reason(r))}</td><td>${esc(detailText(r))}</td><td>${fbCell}</td><td>${detailBtn}</td>`;tb.appendChild(tr);});}
+function prevPage(){if(page>1)load(page-1);}
+function nextPage(){if(page<totalPages)load(page+1);}
+document.getElementById('pageSize').addEventListener('change',e=>{pageSize=parseInt(e.target.value||'20',10)||20;load(1);});
+load(1);"""
     return _html("TrendRadar 情报", "intel", body, script)
 
 
@@ -1132,21 +1169,25 @@ def _page_feedback() -> str:
 <div class='row'><div class='col'><div class='meta'>备注</div><textarea id='note'></textarea></div></div>
 <div class='t'>历史反馈</div>
 <div class='hint'>显示最近反馈记录。支持“撤回锁定”或“删除反馈”；撤回/删除都不会回滚已学习权重。</div>
+<div class='row'><div class='meta' id='histPagerInfo'>加载中...</div><button class='soft' onclick='histPrevPage()'>上一页</button><button class='soft' onclick='histNextPage()'>下一页</button></div>
 <table><thead><tr><th>时间</th><th>条目</th><th>反馈结论</th><th>备注</th><th>操作</th></tr></thead><tbody id='hist'></tbody></table>
 <div id='log' class='log'>请选择一条情报并提交反馈，结果会在这里显示。</div></div>"""
     script = """
-let rows=[]; let lockMap={}; function csv(v){return String(v||'').split(',').map(x=>x.trim()).filter(Boolean);}
+let rows=[]; let lockMap={}; let histPage=1; let histTotalPages=1; let histTotal=0; const histPageSize=20; function csv(v){return String(v||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function w(m){const e=document.getElementById('log');const t=new Date().toLocaleTimeString();e.textContent=`[${t}] ${m}\\n`+e.textContent;}
 function cur(){const idx=parseInt(document.getElementById('pick').value||'-1',10);return idx>=0?rows[idx]:null;}
 function keyOf(r){const it=(r||{}).item||{};return [String(it.source_name||it.source_id||'').toLowerCase().trim(),String(it.title||'').toLowerCase().trim(),String(it.url||'').toLowerCase().trim()].join('|');}
 function rateLabel(v){const n=parseInt(v||0,10);if(n>=5)return '有价值';if(n>=3)return '一般';return '无价值';}
 function setBtns(disabled){['b5','b3','b1'].forEach(id=>{const el=document.getElementById(id);el.disabled=disabled;});}
 function show(){const r=cur();const it=(r||{}).item||{};const locked=!!lockMap[keyOf(r)];document.getElementById('picked').textContent=it.title?`${it.title} | 来源:${it.source_name||it.source_id||'-'} ${locked?'| 状态: 已反馈（不可再次提交）':'| 状态: 未反馈'}`:'未选择';setBtns(locked||!it.title);}
-async function load(){const ld=await api('/api/feedback/locks');lockMap=ld.items||{};const d=await api('/api/intel/latest');rows=d.items||[];const s=document.getElementById('pick');s.innerHTML='';rows.forEach((r,i)=>{const it=r.item||{};const locked=!!lockMap[keyOf(r)];const o=document.createElement('option');o.value=String(i);o.textContent=`${i+1}. ${(it.title||'').slice(0,80)}${locked?' [已反馈]':''}`;s.appendChild(o);});if(!rows.length)s.innerHTML=\"<option value='-1'>暂无情报数据</option>\";const p=localStorage.getItem('trendradar_selected_intel');if(p){try{const row=JSON.parse(p);const idx=rows.findIndex(x=>(x.item||{}).title===(row.item||{}).title);if(idx>=0)s.value=String(idx);}catch(_){}}show();await loadHistory();}
+async function load(){const ld=await api('/api/feedback/locks');lockMap=ld.items||{};const d=await api('/api/intel/latest');rows=d.items||[];const s=document.getElementById('pick');s.innerHTML='';rows.forEach((r,i)=>{const it=r.item||{};const locked=!!lockMap[keyOf(r)];const o=document.createElement('option');o.value=String(i);o.textContent=`${i+1}. ${(it.title||'').slice(0,80)}${locked?' [已反馈]':''}`;s.appendChild(o);});if(!rows.length)s.innerHTML=\"<option value='-1'>暂无情报数据</option>\";const p=localStorage.getItem('trendradar_selected_intel');if(p){try{const row=JSON.parse(p);const idx=rows.findIndex(x=>(x.item||{}).title===(row.item||{}).title);if(idx>=0)s.value=String(idx);}catch(_){}}show();await loadHistory(1);}
 async function submit(rating){const r=cur();if(!r){w('请先选择条目');return;}if(lockMap[keyOf(r)]){w('该条已反馈，不能重复提交');return;}const it=r.item||{};const payload={rating,keywords:r.matched_keywords||[],sources:[it.source_name||it.source_id||''].filter(Boolean),add_keywords:csv(document.getElementById('addk').value),block_keywords:csv(document.getElementById('blk').value),note:document.getElementById('note').value||'',item_title:it.title||'',item_source:it.source_name||it.source_id||'',item_url:it.url||''};const d=await api('/api/feedback','POST',payload);w(d.ok?`反馈成功(${rating}分)`:`反馈失败:${d.error||''}`);if(d.ok)await load();}
 async function undoLock(title,source,url){const d=await api('/api/feedback/undo','POST',{item_title:title,item_source:source,item_url:url});w(d.ok?'已撤销锁定，可重新反馈':'撤销失败:'+ (d.error||''));if(d.ok)await load();}
 async function deleteFeedback(eventIndex,title,source,url){if(!confirm('确认删除这条反馈记录？'))return;const d=await api('/api/feedback/delete','POST',{event_index:eventIndex,item_title:title,item_source:source,item_url:url});w(d.ok?'已删除反馈记录':'删除失败:'+ (d.error||''));if(d.ok)await load();}
-async function loadHistory(){const d=await api('/api/feedback/history');const rows=d.events||[];const tb=document.getElementById('hist');tb.innerHTML='';if(!rows.length){tb.innerHTML='<tr><td colspan=\"5\">暂无历史反馈</td></tr>';return;}rows.forEach(ev=>{const title=String(ev.item_title||'').trim();const source=String(ev.item_source||'').trim();const url=ev.item_url||'';const note=String(ev.note||'').trim();const idx=parseInt(ev.event_index??-1,10);const itemText=title?`${title}${source?`（${source}）`:''}`:'未绑定条目';const actions=title?`<button class='soft' onclick='undoLock(${JSON.stringify(title)},${JSON.stringify(source)},${JSON.stringify(url)})'>撤回锁定</button> <button class='bad soft' onclick='deleteFeedback(${idx},${JSON.stringify(title)},${JSON.stringify(source)},${JSON.stringify(url)})'>删除反馈</button>`:(idx>=0?`<button class='bad soft' onclick='deleteFeedback(${idx},"","","")'>删除反馈</button>`:'-');const tr=document.createElement('tr');tr.innerHTML=`<td>${ev.time||'-'}</td><td>${esc(itemText)}</td><td>${rateLabel(ev.rating||0)}</td><td>${esc(note||'-')}</td><td>${actions}</td>`;tb.appendChild(tr);});}
+function renderHistPager(){document.getElementById('histPagerInfo').textContent=`第 ${histPage}/${histTotalPages} 页，共 ${histTotal} 条`;}
+async function loadHistory(targetPage){histPage=Math.max(1,parseInt(targetPage||histPage,10)||1);const d=await api(`/api/feedback/history?page=${histPage}&page_size=${histPageSize}`);const rows=d.events||[];histPage=Number(d.page||1);histTotalPages=Number(d.total_pages||1);histTotal=Number(d.total||0);const tb=document.getElementById('hist');tb.innerHTML='';renderHistPager();if(!rows.length){tb.innerHTML='<tr><td colspan=\"5\">暂无历史反馈</td></tr>';return;}rows.forEach(ev=>{const title=String(ev.item_title||'').trim();const source=String(ev.item_source||'').trim();const url=ev.item_url||'';const note=String(ev.note||'').trim();const idx=parseInt(ev.event_index??-1,10);const itemText=title?`${title}${source?`（${source}）`:''}`:'未绑定条目';const actions=title?`<button class='soft' onclick='undoLock(${JSON.stringify(title)},${JSON.stringify(source)},${JSON.stringify(url)})'>撤回锁定</button> <button class='bad soft' onclick='deleteFeedback(${idx},${JSON.stringify(title)},${JSON.stringify(source)},${JSON.stringify(url)})'>删除反馈</button>`:(idx>=0?`<button class='bad soft' onclick='deleteFeedback(${idx},"","","")'>删除反馈</button>`:'-');const tr=document.createElement('tr');tr.innerHTML=`<td>${ev.time||'-'}</td><td>${esc(itemText)}</td><td>${rateLabel(ev.rating||0)}</td><td>${esc(note||'-')}</td><td>${actions}</td>`;tb.appendChild(tr);});}
+function histPrevPage(){if(histPage>1)loadHistory(histPage-1);}
+function histNextPage(){if(histPage<histTotalPages)loadHistory(histPage+1);}
 document.getElementById('pick').addEventListener('change',show); load();"""
     return _html("TrendRadar 用户反馈", "feedback", body, script)
 
@@ -1285,7 +1326,9 @@ class AppHandler(BaseHTTPRequestHandler):
     server_version = "TrendRadarWeb/0.4"
 
     def do_GET(self) -> None:
-        p = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        p = parsed.path
+        qs = parse_qs(parsed.query)
         if p in ("/", "/dashboard"):
             raw = _page_dashboard().encode("utf-8")
         elif p == "/intel":
@@ -1328,7 +1371,11 @@ class AppHandler(BaseHTTPRequestHandler):
             _json_response(self, {"ok": True, "items": _j(_p_intel_json()) or []})
             return
         elif p == "/api/intel/feed":
-            _json_response(self, {"ok": True, **_intel_feed_with_read()})
+            feed_items = (_intel_feed_with_read().get("items") or [])
+            page = _to_int((qs.get("page") or ["1"])[0], 1, 1, 100000)
+            page_size = _to_int((qs.get("page_size") or ["20"])[0], 20, 1, 100)
+            paged = _paginate(feed_items, page, page_size)
+            _json_response(self, {"ok": True, **paged})
             return
         elif p == "/api/settings/notification":
             _json_response(self, {"ok": True, "notification": _load_settings().get("notification", {})})
@@ -1358,11 +1405,29 @@ class AppHandler(BaseHTTPRequestHandler):
         elif p == "/api/feedback/history":
             state = load_feedback_state(str(_p_feedback()))
             raw_events = state.get("events", [])
-            start_idx = max(0, len(raw_events) - 200)
+            total = len(raw_events)
+            page = _to_int((qs.get("page") or ["1"])[0], 1, 1, 100000)
+            page_size = _to_int((qs.get("page_size") or ["20"])[0], 20, 1, 100)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+            page = max(1, min(page, total_pages))
+            start = (page - 1) * page_size
+            end = min(total, start + page_size)
+
             events = []
-            for idx in range(len(raw_events) - 1, start_idx - 1, -1):
+            for rev_idx in range(start, end):
+                idx = total - 1 - rev_idx
                 events.append({**(raw_events[idx] or {}), "event_index": idx})
-            _json_response(self, {"ok": True, "events": events})
+            _json_response(
+                self,
+                {
+                    "ok": True,
+                    "events": events,
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": total_pages,
+                },
+            )
             return
         elif p == "/api/keywords/suggestions":
             _json_response(self, _suggest_keywords_from_feedback(limit=20))

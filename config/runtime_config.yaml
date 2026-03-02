@@ -1,0 +1,222 @@
+app:
+  timezone: Asia/Shanghai
+  show_version_update: true
+schedule:
+  enabled: true
+  preset: always_on
+platforms:
+  enabled: true
+  sources:
+  - id: toutiao
+    name: 今日头条
+  - id: baidu
+    name: 百度热搜
+  - id: wallstreetcn-hot
+    name: 华尔街见闻
+  - id: thepaper
+    name: 澎湃新闻
+  - id: bilibili-hot-search
+    name: bilibili 热搜
+  - id: cls-hot
+    name: 财联社热门
+  - id: ifeng
+    name: 凤凰网
+  - id: tieba
+    name: 贴吧
+  - id: weibo
+    name: 微博
+  - id: douyin
+    name: 抖音
+  - id: zhihu
+    name: 知乎
+  - id: 36kr
+    name: 36氪
+  - id: huxiu
+    name: 虎嗅
+  - id: ithome
+    name: IT之家
+  - id: juejin
+    name: 掘金
+  - id: v2ex
+    name: V2EX
+  - id: douban-movie
+    name: 豆瓣电影
+  - id: douban-group
+    name: 豆瓣小组
+rss:
+  enabled: true
+  freshness_filter:
+    enabled: true
+    max_age_days: 3
+  feeds:
+  - id: hacker-news
+    name: Hacker News
+    url: https://hnrss.org/frontpage
+  - id: ruanyifeng
+    name: 阮一峰的网络日志
+    url: http://www.ruanyifeng.com/blog/atom.xml
+  - id: yahoo-finance
+    name: 雅虎财经
+    url: https://finance.yahoo.com/news/rssindex
+  - id: techcrunch
+    name: TechCrunch
+    url: https://techcrunch.com/feed/
+  - id: theverge
+    name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+  - id: wired
+    name: Wired
+    url: https://www.wired.com/feed/rss
+  - id: arstechnica
+    name: Ars Technica
+    url: https://feeds.arstechnica.com/arstechnica/index
+  - id: reuters-world
+    name: Reuters World
+    url: https://feeds.reuters.com/Reuters/worldNews
+  - id: reuters-business
+    name: Reuters Business
+    url: https://feeds.reuters.com/reuters/businessNews
+  - id: wsj-world
+    name: WSJ World
+    url: https://feeds.a.dj.com/rss/RSSWorldNews.xml
+  - id: bloomberg-tech
+    name: Bloomberg Technology
+    url: https://feeds.bloomberg.com/technology/news.rss
+  - id: economist
+    name: The Economist
+    url: https://www.economist.com/the-world-this-week/rss.xml
+  - id: ft-world
+    name: Financial Times World
+    url: https://www.ft.com/world?format=rss
+  - id: mit-tech-review
+    name: MIT Technology Review
+    url: https://www.technologyreview.com/feed/
+  - id: infoq-cn
+    name: InfoQ 中文
+    url: https://www.infoq.cn/feed
+  - id: sspai
+    name: 少数派
+    url: https://sspai.com/feed
+report:
+  mode: current
+  display_mode: keyword
+  sort_by_position_first: false
+  rank_threshold: 5
+  max_news_per_keyword: 0
+display:
+  region_order:
+  - new_items
+  - hotlist
+  - rss
+  - standalone
+  - ai_analysis
+  regions:
+    hotlist: true
+    new_items: false
+    rss: true
+    standalone: false
+    ai_analysis: true
+  standalone:
+    platforms:
+    - zhihu
+    - wallstreetcn-hot
+    rss_feeds: []
+    max_items: 20
+notification:
+  enabled: true
+  channels:
+    feishu:
+      webhook_url: ''
+    dingtalk:
+      webhook_url: ''
+    wework:
+      webhook_url: https://example.com
+      msg_type: markdown
+    telegram:
+      bot_token: ''
+      chat_id: ''
+    email:
+      from: ''
+      password: ''
+      to: ''
+      smtp_server: ''
+      smtp_port: ''
+    ntfy:
+      server_url: https://ntfy.sh
+      topic: ''
+      token: ''
+    bark:
+      url: ''
+    slack:
+      webhook_url: ''
+    generic_webhook:
+      webhook_url: ''
+      payload_template: ''
+storage:
+  backend: auto
+  formats:
+    sqlite: true
+    txt: false
+    html: true
+  local:
+    data_dir: output
+    retention_days: 0
+  remote:
+    retention_days: 0
+    endpoint_url: ''
+    bucket_name: ''
+    access_key_id: ''
+    secret_access_key: ''
+    region: ''
+  pull:
+    enabled: false
+    days: 7
+ai:
+  model: glm-4-flash
+  api_key: 56e671a3357824fa1abea6df8e20e696.kreWntpK6LDGbAyR
+  api_base: https://open.bigmodel.cn/api/paas/v4/
+  timeout: 120
+  temperature: 1.0
+  max_tokens: 5000
+  num_retries: 1
+  fallback_models: []
+ai_analysis:
+  enabled: true
+  language: Chinese
+  prompt_file: ai_analysis_prompt.txt
+  mode: follow_report
+  max_news_for_analysis: 150
+  include_rss: false
+  include_standalone: true
+  include_rank_timeline: true
+ai_translation:
+  enabled: false
+  language: 中文
+  prompt_file: ai_translation_prompt.txt
+advanced:
+  debug: false
+  version_check_url: https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/version
+  mcp_version_check_url: https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/version_mcp
+  configs_version_check_url: https://raw.githubusercontent.com/sansan0/TrendRadar/refs/heads/master/version_configs
+  crawler:
+    request_interval: 2000
+    use_proxy: false
+    default_proxy: http://127.0.0.1:10801
+  rss:
+    request_interval: 1000
+    timeout: 15
+    use_proxy: false
+    proxy_url: ''
+  weight:
+    rank: 0.6
+    frequency: 0.3
+    hotness: 0.1
+  max_accounts_per_channel: 3
+  batch_size:
+    default: 4000
+    dingtalk: 20000
+    feishu: 30000
+    bark: 4000
+    slack: 4000
+  batch_send_interval: 3
+  feishu_message_separator: ━━━━━━━━━━━━━━━━

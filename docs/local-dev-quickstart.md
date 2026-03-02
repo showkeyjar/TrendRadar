@@ -64,7 +64,7 @@ python -m trendradar.webapp --host 127.0.0.1 --port 8899
 
 说明：
 - Web 控制台会把通知配置写入 `output/webapp/settings.json`。
-- 每次点击“执行一次抓取”时，会生成 `output/webapp/runtime_config.yaml` 并注入运行，不改动原始 `config/config.yaml`。
+- 每次点击“执行一次抓取”时，会生成 `config/runtime_config.yaml` 并注入运行，不改动原始 `config/config.yaml`。
 
 ## 4.2 Docker 打包与运行
 本项目已支持 Docker 本地打包（主程序 + MCP + Web 控制台）。
@@ -107,6 +107,43 @@ docker compose -f docker-compose-single.yml up -d --build
   sudo chown -R $USER:$USER /data/trendradar
   chmod -R u+rwX /data/trendradar
   ```
+
+## 4.3 Docker 升级（保留原有数据与配置）
+适用于已在生产/长期运行中的 Docker 部署，目标是升级镜像版本且不丢失历史数据与配置。
+
+升级前确认：
+- `docker/.env` 中的 `HOST_CONFIG_DIR`、`HOST_OUTPUT_DIR` 指向宿主机持久化目录。
+- 配置与数据都在宿主机目录中（而不是只在容器可写层）。
+
+```bash
+# 1) 进入部署目录并备份（强烈建议）
+cd docker
+cp .env .env.bak
+# 可选：备份配置/数据目录
+# cp -r /data/trendradar/config /data/trendradar/config.bak
+# cp -r /data/trendradar/output /data/trendradar/output.bak
+
+# 2) 拉取最新代码（git 部署）
+cd ..
+git pull
+cd docker
+
+# 3) 重建并重启容器（不会删除宿主机挂载目录）
+# 多容器模式：
+docker compose -f docker-compose-build.yml up -d --build
+
+# 单容器模式：
+# docker compose -f docker-compose-single.yml up -d --build
+```
+
+注意事项（避免数据丢失）：
+- 不要执行 `docker compose down -v`（会删除卷数据）。
+- 不要随意更改 `HOST_CONFIG_DIR`、`HOST_OUTPUT_DIR` 到新路径，否则会“看起来像丢数据”。
+- 若仅使用官方镜像升级，也可以先 `docker compose pull` 再 `docker compose up -d`。
+- 升级后建议在 Web 控制台检查一次：
+  - `/schedule`：确认定时配置仍正确；
+  - `/notification`：确认通知配置仍在；
+  - `/intel`：确认历史情报可见。
 
 ## 5. VS Code 调试（推荐）
 在 `.vscode/launch.json` 使用以下配置：
