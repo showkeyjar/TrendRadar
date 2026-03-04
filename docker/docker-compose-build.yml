@@ -57,6 +57,8 @@ services:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
       - RUN_MODE=${RUN_MODE:-cron}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
+      - RUN_INTEL_AFTER_CRAWL=${RUN_INTEL_AFTER_CRAWL:-true}
+      - INTEL_TOP_K=${INTEL_TOP_K:-30}
 
   trendradar-webapp:
     build:

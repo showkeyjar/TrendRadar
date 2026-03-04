@@ -896,7 +896,12 @@ def _intel_row_key(row: Dict[str, Any]) -> str:
 
 
 def _load_intel_feed() -> Dict[str, Any]:
-    return _j(_p_intel_feed()) or {"items": []}
+    data = _j(_p_intel_feed()) or {}
+    if not isinstance(data, dict):
+        return {"items": [], "meta": {}}
+    data.setdefault("items", [])
+    data.setdefault("meta", {})
+    return data
 
 
 def _save_intel_feed(data: Dict[str, Any]) -> None:
@@ -929,17 +934,45 @@ def _merge_into_intel_feed(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     merged = list(by_key.values())
     merged.sort(key=lambda x: x.get("last_seen", ""), reverse=True)
     merged = merged[:500]
-    out = {"items": merged}
+    out = {"items": merged, "meta": dict(current.get("meta", {}))}
     _save_intel_feed(out)
     return out
 
 
-def _intel_feed_with_read() -> Dict[str, Any]:
+def _sync_latest_digest_into_feed() -> Dict[str, Any]:
+    """
+    将 latest_digest.json 增量同步到 feed.json（按 latest 文件修改时间去重触发）。
+
+    这样即便抓取由容器内 cron 触发、未走 Web 按钮路径，情报列表页也能看到新增数据。
+    """
     feed = _load_intel_feed()
-    if not feed.get("items"):
-        latest = _j(_p_intel_json()) or []
-        if latest:
-            feed = _merge_into_intel_feed(latest)
+    latest_path = _p_intel_json()
+    if not latest_path.exists():
+        return feed
+
+    latest_mtime = latest_path.stat().st_mtime
+    meta = feed.get("meta", {}) if isinstance(feed.get("meta", {}), dict) else {}
+    synced_mtime = float(meta.get("latest_digest_mtime", 0) or 0)
+
+    # latest_digest 文件有更新（或 feed 为空）时才执行合并，避免每次请求都重复累计 seen_count
+    if latest_mtime <= synced_mtime and feed.get("items"):
+        return feed
+
+    latest_rows = _j(latest_path) or []
+    if latest_rows:
+        feed = _merge_into_intel_feed(latest_rows)
+    else:
+        feed = _load_intel_feed()
+
+    meta = feed.get("meta", {}) if isinstance(feed.get("meta", {}), dict) else {}
+    meta["latest_digest_mtime"] = latest_mtime
+    feed["meta"] = meta
+    _save_intel_feed(feed)
+    return feed
+
+
+def _intel_feed_with_read() -> Dict[str, Any]:
+    feed = _sync_latest_digest_into_feed()
     read = _load_read_state().get("items", {})
     enriched = []
     for item in feed.get("items", []):

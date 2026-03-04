@@ -22,6 +22,8 @@ services:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-*/30 * * * *}
       - RUN_MODE=${RUN_MODE:-cron}
       - IMMEDIATE_RUN=${IMMEDIATE_RUN:-true}
+      - RUN_INTEL_AFTER_CRAWL=${RUN_INTEL_AFTER_CRAWL:-true}
+      - INTEL_TOP_K=${INTEL_TOP_K:-30}
       # 单容器模式：同时启用 Web 控制台与 MCP
       - RUN_WEBAPP=${RUN_WEBAPP:-true}
       - WEBAPP_PORT=${WEBAPP_PORT:-8899}

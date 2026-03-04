@@ -36,8 +36,12 @@ case "${RUN_MODE:-cron}" in
     exec /usr/local/bin/python -m trendradar
     ;;
 "cron")
-    # 生成 crontab
-    echo "${CRON_SCHEDULE:-*/30 * * * *} cd /app && /usr/local/bin/python -m trendradar" > /tmp/crontab
+    # 生成 crontab（默认：抓取后自动执行情报分析）
+    CRON_CMD="cd /app && /usr/local/bin/python -m trendradar"
+    if [ "${RUN_INTEL_AFTER_CRAWL:-true}" = "true" ]; then
+        CRON_CMD="${CRON_CMD} && /usr/local/bin/python -m trendradar.intel run --top ${INTEL_TOP_K:-30} --output output/intel/latest_digest.md --json-output output/intel/latest_digest.json"
+    fi
+    echo "${CRON_SCHEDULE:-*/30 * * * *} ${CRON_CMD}" > /tmp/crontab
     
     echo "📅 生成的crontab内容:"
     cat /tmp/crontab
